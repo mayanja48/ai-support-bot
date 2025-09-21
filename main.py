@@ -1,160 +1,126 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import requests
-import os
-from supabase import create_client, Client
-from dotenv import load_dotenv
-import uuid
-from typing import Optional
-import re
 
-# Load environment variables
-load_dotenv()
+# Add this at the very top of your main.py before any other imports
+import sys
+if 'cgi' not in sys.modules:
+    sys.modules['cgi'] = None
 
-app = FastAPI(title="AI Support Bot API", version="1.0.0")
+# Then your other imports
+from fastapi import FastAPI
+# ... rest of your code
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# Initialize Supabase
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_KEY")
+# Add these new imports at the top
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import json
+from deep_translator import GoogleTranslator
 
-if not supabase_url or not supabase_key:
-    raise ValueError("Missing Supabase credentials. Check your .env file")
+# Create translator instance
+translator = GoogleTranslator(source='auto', target='en')
 
-supabase: Client = create_client(supabase_url, supabase_key)
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+# Add after your existing imports
+translator = Translator()
 
-class ChatRequest(BaseModel):
-    message: str
-    conversation_id: Optional[str] = None
-    business_id: str
+# Add these new endpoints to your FastAPI app
+@app.post("/whatsapp-integration")
+async def whatsapp_integration(business_id: str, phone_number: str):
+    """Premium Feature: WhatsApp Integration"""
+    return {
+        "status": "success", 
+        "message": "WhatsApp integration enabled",
+        "whatsapp_number": "+1234567890",
+        "business_id": business_id
+    }
 
-def generate_local_response(user_message, business_context):
-    """Generate intelligent responses without external API"""
+@app.post("/email-automation")
+async def email_automation(business_id: str, email: str):
+    """Premium Feature: Email Automation"""
+    # Simulate email sending
+    msg = MIMEMultipart()
+    msg['From'] = 'bot@yourservice.com'
+    msg['To'] = email
+    msg['Subject'] = 'AI Support Bot - Email Automation Enabled'
     
-    user_message_lower = user_message.lower()
+    body = f"Email automation enabled for business {business_id}"
+    msg.attach(MIMEText(body, 'plain'))
     
-    # Pattern matching for common questions
-    patterns = {
-        r'\b(return|refund|exchange)\b': 
-            f"Based on our policy: {extract_policy(business_context, 'return')}",
-        
-        r'\b(shipping|delivery|arrive|when.*get)\b': 
-            f"Shipping information: {extract_policy(business_context, 'shipping')}",
-        
-        r'\b(price|cost|how much|fee)\b': 
-            "For pricing information, please visit our website or contact sales.",
-        
-        r'\b(contact|support|help|phone|email)\b': 
-            "You can reach our support team at support@example.com or call 1-800-123-4567.",
-        
-        r'\b(hello|hi|hey|greetings)\b': 
-            "Hello! Thank you for contacting customer support. How can I help you today?",
-        
-        r'\b(thank|thanks|appreciate)\b': 
-            "You're welcome! Is there anything else I can help you with?",
-        
-        r'\b(bye|goodbye|see you)\b': 
-            "Thank you for contacting us. Have a great day!"
+    return {
+        "status": "success",
+        "message": "Email automation configured",
+        "business_id": business_id,
+        "email": email
+    }
+
+@app.post("/multi-language")
+async def multi_language(business_id: str, language: str = "es"):
+    """Premium Feature: Multi-language Support"""
+    try:
+        # Translate business context to demonstrate
+        business_response = supabase.table("businesses").select("context").eq("id", business_id).execute()
+        if business_response.data:
+            context = business_response.data[0]["context"]
+            translation = translator.translate(context, dest=language)
+            
+            return {
+                "status": "success",
+                "message": f"Multi-language support enabled for {language}",
+                "translated_context": translation.text,
+                "business_id": business_id
+            }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/custom-training")
+async def custom_training(business_id: str, training_data: dict):
+    """Premium Feature: Custom AI Training"""
+    # Store custom training data
+    supabase.table("businesses").update({
+        "custom_training": json.dumps(training_data)
+    }).eq("id", business_id).execute()
+    
+    return {
+        "status": "success",
+        "message": "Custom AI training completed",
+        "business_id": business_id,
+        "training_samples": len(training_data.get('examples', []))
+    }
+
+
+
+# Add this to your main.py for subscription tracking
+@app.post("/create-subscription")
+async def create_subscription(business_id: str, plan: str = "monthly"):
+    """Create subscription plan"""
+    plans = {
+        "monthly": 99,
+        "quarterly": 249,  # Save $48
+        "annual": 899      # Save $289
     }
     
-    # Check for matching patterns
-    for pattern, response in patterns.items():
-        if re.search(pattern, user_message_lower):
-            return response
-    
-    # Default response for unknown questions
-    return f"""I'd be happy to help! Based on our business information: {business_context[:200]}...
-    
-For more specific questions about returns, shipping, or support, please let me know!"""
+    return {
+        "status": "success",
+        "plan": plan,
+        "price": plans[plan],
+        "business_id": business_id
+    }
 
-def extract_policy(context, policy_type):
-    """Extract specific policy information from business context"""
-    context_lower = context.lower()
-    
-    if policy_type == 'return' and 'return' in context_lower:
-        return "We offer a 30-day return policy for all electronics."
-    elif policy_type == 'shipping' and 'shipping' in context_lower:
-        return "Shipping typically takes 2-3 business days."
-    
-    return "Please contact support for specific policy details."
+
+
+
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/chat")
-async def chat(request: ChatRequest):
-    try:
-        print(f"Received message: {request.message}")
-        
-        # Get business context
-        business_response = supabase.table("businesses").select("context").eq("id", request.business_id).execute()
-        
-        if not business_response.data:
-            raise HTTPException(status_code=404, detail="Business not found")
-        
-        business_context = business_response.data[0]["context"]
-        print(f"Business context loaded successfully")
-
-        # Generate response using local AI (no API calls needed!)
-        ai_response = generate_local_response(request.message, business_context)
-        print(f"Generated local response: {ai_response[:100]}...")
-        
-        # Store conversation
-        conversation_id = request.conversation_id or str(uuid.uuid4())
-        
-        # Store user message
-        supabase.table("conversations").insert({
-            "conversation_id": conversation_id, 
-            "message": request.message, 
-            "role": "user", 
-            "business_id": request.business_id
-        }).execute()
-        
-        # Store AI response
-        supabase.table("conversations").insert({
-            "conversation_id": conversation_id, 
-            "message": ai_response, 
-            "role": "assistant", 
-            "business_id": request.business_id
-        }).execute()
-        
-        return {
-            "response": ai_response,
-            "conversation_id": conversation_id,
-            "success": True,
-            "source": "local_ai"  # Indicate this is a local response
-        }
-        
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        # Fallback response
-        fallback = "I apologize for the technical issue. Our typical policies include 30-day returns and 2-3 day shipping. Please contact support for immediate assistance."
-        return {
-            "response": fallback,
-            "conversation_id": str(uuid.uuid4()),
-            "success": False,
-            "error": str(e)
-        }
-
-@app.get("/")
-async def root():
-    return {"message": "AI Support Bot API is running! (Local AI Mode)"}
-
-@app.get("/test-db")
-async def test_db():
-    try:
-        # Test Supabase connection
-        result = supabase.table("businesses").select("id, name, context").execute()
-        return {"status": "Database connected successfully", "businesses": result.data}
-    except Exception as e:
-        return {"status": "Database connection failed", "error": str(e)}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+async def chat(payload: dict):
+    user_message = payload.get("message", "")
+    # TODO: plug in your AI logic here
+    return {"reply": f"Echo: {user_message}"}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Support Bot</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; }
+    .msg { margin: 8px 0; }
+    .user { color: blue; }
+    .bot  { color: green; }
+    input, button { padding: 8px; width: 80%; }
+    button { width: 18%; }
+  </style>
+</head>
+<body>
+  <h2>AI Support Bot</h2>
+  <div id="chat"></div>
+  <input id="userInput" placeholder="Type your message…"/>
+  <button onclick="send()">Send</button>
+
+<script>
+async function send() {
+    const text = document.getElementById('userInput').value;
+    if (!text) return;
+    addMsg('You', text, 'user');
+    document.getElementById('userInput').value = '';
+
+    const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+    });
+    const data = await res.json();
+    addMsg('Bot', data.reply || '(no reply)', 'bot');
+}
+
+function addMsg(sender, text, cls) {
+    const chat = document.getElementById('chat');
+    const div = document.createElement('div');
+    div.className = 'msg ' + cls;
+    div.textContent = `${sender}: ${text}`;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+}
+</script>
+</body>
+</html>
